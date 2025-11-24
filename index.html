@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>寶可夢數學大師 - 異分母分數 (雲端同步版)</title>
+    <style>
+        :root {
+            --poke-red: #FF3E3E;
+            --poke-dark-red: #CC0000;
+            --poke-white: #FFFFFF;
+            --poke-black: #2D2D2D;
+            --poke-yellow: #FFCB05;
+            --poke-blue: #3B4CCA;
+            --bg-color: #F0F0F0;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
+        }
+
+        body {
+            background-color: #333;
+            background-image: linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--poke-black);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 遊戲機外框 */
+        .pokedex-container {
+            width: 100%;
+            max-width: 800px;
+            background-color: var(--poke-red);
+            border-radius: 20px;
+            padding: 15px;
+            box-shadow: 0 5px 0 var(--poke-dark-red), 0 10px 10px rgba(0,0,0,0.5);
+            position: relative;
+            margin-bottom: 15px;
+            border: 4px solid var(--poke-black);
+        }
+
+        /* 頂部控制列 */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .lights-left {
+            display: flex;
+            align-items: start;
+            gap: 10px;
+        }
+
+        .camera-lens {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, #4DEEEE, #0099CC);
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 0 10px #4DEEEE;
+            position: relative;
+        }
+        
+        .camera-lens::after {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px;
+            width: 15px; height: 15px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        .small-lights {
+            display: flex;
+            gap: 5px;
+            padding-top: 5px;
+        }
+        .light {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            border: 2px solid rgba(0,0,0,0.3);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+        .light.red { background-color: #FF0000; }
+        .light.yellow { background-color: #FFFF00; }
+        .light.green { background-color: #00FF00; }
+
+        /* 音樂按鈕樣式 */
+        .music-btn {
+            background: #222;
+            color: #4DEEEE;
+            border: 2px solid #444;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: inset 0 0 5px #000;
+        }
+        .music-btn.active {
+            background: #4DEEEE;
+            color: #222;
+            box-shadow: 0 0 10px #4DEEEE;
+        }
+        
+        /* 雲端登入按鈕 */
+        .auth-btn {
+            background: #444;
+            color: white;
+            border: 2px solid #fff;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .auth-btn.logged-in {
+            background: #4caf50;
+            border-color: #81c784;
+        }
+
+        /* 螢幕區 */
+        .screen-border {
+            background-color: #DEDEDE;
+            border-radius: 10px 10px 40px 10px;
+            padding: 20px;
+            border: 3px solid var(--poke-black);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .battle-screen {
+            background-color: #F8F8F8;
+            background-image: linear-gradient(to bottom, #ffffff, #e0f0ff);
+            border: 3px solid var(--poke-black);
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 280px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+        }
+
+        .mistake-indicators {
+            position: absolute; top: 10px; left: 10px; display: flex; gap: 5px; z-index: 10;
+        }
+        .mistake-dot {
+            width: 12px; height: 12px; border-radius: 50%; background: rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.2);
+        }
+        .mistake-dot.active { background: #FF0000; box-shadow: 0 0 5px red; }
+
+        .pokemon-display {
+            position: relative; width: 100%; height: 180px; display: flex; justify-content: center; align-items: center; margin-top: 10px;
+        }
+
+        .pokemon-img {
+            width: 160px; height: 160px; image-rendering: pixelated; filter: drop-shadow(0 5px 5px rgba(0,0,0,0.2)); transition: all 0.5s ease; z-index: 2;
+        }
+        .pokemon-img.silhouette { filter: brightness(0) grayscale(100%); opacity: 0.8; }
+        .pokemon-img.run-away { animation: runAway 0.8s forwards; }
+        .pokemon-img.captured { animation: captureAnim 1s forwards; }
+
+        @keyframes runAway { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(-300px) scale(0.5); opacity: 0; } }
+        @keyframes captureAnim { 0% { transform: scale(1); filter: brightness(10); } 100% { transform: scale(0); opacity: 0; } }
+
+        .pokeball-throw {
+            position: absolute; width: 40px; height: 40px; background: url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png') no-repeat center/contain; z-index: 10; display: none;
+        }
+
+        .battle-platform {
+            position: absolute; bottom: 15px; width: 200px; height: 60px; background: rgba(0,0,0,0.1); border-radius: 50%; transform: scaleY(0.4); z-index: 1;
+        }
+
+        .problem-float {
+            background: rgba(255,255,255,0.95); border: 3px solid var(--poke-black); border-radius: 10px; padding: 8px 20px; position: absolute; top: 10px; right: 5px; font-weight: bold; font-size: 1.8rem; display: flex; align-items: center; gap: 5px; box-shadow: 3px 3px 0 rgba(0,0,0,0.2); z-index: 5;
+        }
+
+        .control-panel {
+            background-color: var(--poke-black); color: white; padding: 15px; border-radius: 0 0 15px 15px; min-height: 160px; display: flex; flex-direction: column; justify-content: space-between; border-left: 5px solid var(--poke-dark-red); border-right: 5px solid var(--poke-dark-red); border-bottom: 5px solid var(--poke-dark-red);
+        }
+
+        .dialog-box {
+            border: 3px solid #eee; border-radius: 8px; padding: 10px; font-size: 1.1rem; line-height: 1.4; margin-bottom: 10px; background: #222; color: white; min-height: 75px; font-family: "Courier New", Courier, monospace;
+        }
+
+        .action-buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+        .btn-action {
+            background: #f8f8f8; color: var(--poke-black); border: 3px solid #666; padding: 12px 10px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.1s; min-width: 100px; flex: 1; max-width: 48%; touch-action: manipulation;
+        }
+        .btn-action:active { background: var(--poke-yellow); border-color: #B8860B; transform: scale(0.96); }
+
+        .input-mode-container {
+            display: flex; align-items: center; gap: 10px; justify-content: center; background: #ddd; padding: 10px; border-radius: 10px; color: black; border: 3px solid #555; flex-wrap: wrap;
+        }
+
+        input[type="number"] {
+            width: 60px; height: 45px; font-size: 1.3rem; text-align: center; border: 2px solid var(--poke-black); border-radius: 5px; font-weight: bold;
+        }
+        input[type="number"]:focus { outline: none; background-color: #e0f7fa; border-color: var(--poke-blue); }
+
+        .fraction { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 2px; color: black; font-weight: bold; }
+        .numerator { border-bottom: 2px solid black; width: 100%; text-align: center; padding-bottom:2px; }
+        .denominator { width: 100%; text-align: center; padding-top:2px; }
+
+        .pc-box {
+            width: 100%; max-width: 800px; background: white; border: 4px solid var(--poke-black); border-radius: 15px; padding: 15px; margin-top: 15px; position: relative;
+        }
+        .pc-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .pokemon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 5px; max-height: 300px; overflow-y: auto; padding: 5px; }
+        .grid-item { background: #eee; border-radius: 8px; padding: 3px; text-align: center; border: 1px solid #ccc; transition: all 0.3s; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .grid-item.unknown img { filter: brightness(0); opacity: 0.3; }
+        .grid-item.caught { border-color: var(--poke-yellow); background: #FFFDE7; }
+        .grid-item.caught img { filter: none; }
+        .grid-item img { width: 90%; height: auto; }
+        .grid-item .name-tag { font-size: 0.6rem; margin-top: 2px; font-weight: bold; color: #555; }
+
+        .victory-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: none; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; animation: fadeIn 1s;
+        }
+        .badge-img {
+            width: 150px; height: 150px; background: radial-gradient(circle, gold, orange); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 4rem; border: 5px solid white; box-shadow: 0 0 30px gold; margin: 20px; animation: spin 10s linear infinite;
+        }
+        
+        /* 雲端狀態指示燈 */
+        .cloud-status {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 0.8rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #999;
+        }
+        .status-dot.online { background: #00FF00; box-shadow: 0 0 5px #00FF00; }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .shake-anim { animation: shake 0.5s; }
+        .bounce { animation: bounce 2s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+    </style>
+</head>
+<body>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, signInWithPopup
