@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>寶可夢數學大師 - 異分母分數 (修復版)</title>
+    <title>寶可夢數學大師 - 異分母分數 (最終完美版)</title>
     <style>
         :root {
             --poke-red: #FF3E3E;
@@ -66,6 +66,15 @@
             gap: 10px;
         }
 
+        /* 右上角控制區群組 (修正重疊問題) */
+        .top-right-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
         .camera-lens {
             width: 50px;
             height: 50px;
@@ -107,14 +116,15 @@
             background: #222;
             color: #4DEEEE;
             border: 2px solid #444;
-            border-radius: 5px;
-            padding: 5px 10px;
+            border-radius: 20px; /* 圓角一致 */
+            padding: 6px 12px;
             font-size: 0.8rem;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 5px;
             box-shadow: inset 0 0 5px #000;
+            white-space: nowrap;
         }
         .music-btn.active {
             background: #4DEEEE;
@@ -122,15 +132,35 @@
             box-shadow: 0 0 10px #4DEEEE;
         }
         
+        /* 雲端狀態列 (修正樣式) */
+        .cloud-status {
+            /* 移除原本的 absolute 定位 */
+            font-size: 0.8rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.2); /* 增加底色 */
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #999;
+        }
+        .status-dot.online { background: #00FF00; box-shadow: 0 0 5px #00FF00; }
+
         /* 雲端登入按鈕 */
         .auth-btn {
             background: #444;
             color: white;
-            border: 2px solid #fff;
-            border-radius: 5px;
-            padding: 5px 10px;
-            font-size: 0.8rem;
+            border: 1px solid #fff;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.75rem;
             cursor: pointer;
+            margin-left: 5px;
         }
         .auth-btn.logged-in {
             background: #4caf50;
@@ -242,22 +272,6 @@
             width: 150px; height: 150px; background: radial-gradient(circle, gold, orange); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 4rem; border: 5px solid white; box-shadow: 0 0 30px gold; margin: 20px; animation: spin 10s linear infinite;
         }
         
-        /* 雲端狀態指示燈 */
-        .cloud-status {
-            position: absolute;
-            top: 5px;
-            right: 10px;
-            font-size: 0.8rem;
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .status-dot {
-            width: 8px; height: 8px; border-radius: 50%; background: #999;
-        }
-        .status-dot.online { background: #00FF00; box-shadow: 0 0 5px #00FF00; }
-
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .shake-anim { animation: shake 0.5s; }
@@ -277,11 +291,7 @@
     </div>
 
     <div class="pokedex-container">
-        <div class="cloud-status">
-            <div class="status-dot" id="cloudStatusDot"></div>
-            <span id="cloudStatusText">離線模式</span>
-            <button id="authBtn" class="auth-btn" onclick="toggleAuth()">登入</button>
-        </div>
+        
         <div class="top-bar">
             <div class="lights-left">
                 <div class="camera-lens"></div>
@@ -291,8 +301,16 @@
                     <div class="light green"></div>
                 </div>
             </div>
-            <div class="music-btn" id="musicToggle" onclick="toggleMusic()">
-                🎵 BGM: OFF
+            
+            <div class="top-right-group">
+                <div class="cloud-status">
+                    <div class="status-dot" id="cloudStatusDot"></div>
+                    <span id="cloudStatusText">離線模式</span>
+                    <button id="authBtn" class="auth-btn" onclick="toggleAuth()">登入</button>
+                </div>
+                <div class="music-btn" id="musicToggle" onclick="toggleMusic()">
+                    🎵 BGM: OFF
+                </div>
             </div>
         </div>
 
@@ -363,14 +381,15 @@
 
                         if (u) {
                             statusDot.classList.add('online');
-                            statusText.innerText = `訓練家: ${u.displayName}`;
+                            // 名字太長可以截斷，避免破版
+                            statusText.innerText = `${u.displayName.substring(0,6)}`;
                             btn.innerText = "登出";
                             btn.classList.add('logged-in');
                             window.Cloud.load(); 
                         } else {
                             statusDot.classList.remove('online');
-                            statusText.innerText = "離線模式";
-                            btn.innerText = "登入雲端";
+                            statusText.innerText = "離線";
+                            btn.innerText = "登入";
                             btn.classList.remove('logged-in');
                         }
                     });
