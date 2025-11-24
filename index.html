@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>寶可夢數學大師 - 異分母分數 (修復版)</title>
+    <title>寶可夢數學大師 - 異分母分數 (平板專用版)</title>
     <style>
         :root {
             --poke-red: #FF3E3E;
@@ -59,7 +59,7 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-        
+       
         .lights-left {
             display: flex;
             align-items: start;
@@ -75,7 +75,7 @@
             box-shadow: 0 0 10px #4DEEEE;
             position: relative;
         }
-        
+       
         .camera-lens::after {
             content: '';
             position: absolute;
@@ -120,21 +120,6 @@
             background: #4DEEEE;
             color: #222;
             box-shadow: 0 0 10px #4DEEEE;
-        }
-        
-        /* 雲端登入按鈕 */
-        .auth-btn {
-            background: #444;
-            color: white;
-            border: 2px solid #fff;
-            border-radius: 5px;
-            padding: 5px 10px;
-            font-size: 0.8rem;
-            cursor: pointer;
-        }
-        .auth-btn.logged-in {
-            background: #4caf50;
-            border-color: #81c784;
         }
 
         /* 螢幕區 */
@@ -269,6 +254,75 @@
 </head>
 <body>
 
+    <!-- Firebase Module Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        window.Cloud = {
+            db: null,
+            user: null,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'poke-math-default',
+            init: async () => {
+                if (typeof __firebase_config === 'undefined') return;
+                try {
+                    const app = initializeApp(JSON.parse(__firebase_config));
+                    const auth = getAuth(app);
+                    window.Cloud.db = getFirestore(app);
+                    
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    onAuthStateChanged(auth, (u) => {
+                        window.Cloud.user = u;
+                        if (u) {
+                            document.getElementById('cloudStatusDot').classList.add('online');
+                            document.getElementById('cloudStatusText').innerText = "雲端連線中";
+                            window.Cloud.load(); // 登入後自動載入
+                        }
+                    });
+                } catch (e) {
+                    console.error("Cloud Init Error:", e);
+                }
+            },
+            save: async (caughtArray) => {
+                if (!window.Cloud.db || !window.Cloud.user) return;
+                try {
+                    // 嚴格路徑規則
+                    const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
+                    await setDoc(doc(window.Cloud.db, path, 'saveFile'), { 
+                        caughtList: caughtArray,
+                        timestamp: serverTimestamp() 
+                    });
+                } catch (e) {
+                    console.error("Save Failed:", e);
+                }
+            },
+            load: () => {
+                if (!window.Cloud.db || !window.Cloud.user) return;
+                const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
+                onSnapshot(doc(window.Cloud.db, path, 'saveFile'), (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if (data && data.caughtList) {
+                            // 更新全域變數 caughtPokemon (Set 結構)
+                            window.caughtPokemon = new Set(data.caughtList);
+                            // 觸發 UI 更新
+                            if (typeof window.renderPC === 'function') window.renderPC();
+                        }
+                    }
+                });
+            }
+        };
+        
+        window.Cloud.init();
+    </script>
+
+    <!-- 勝利畫面 -->
     <div class="victory-modal" id="victoryModal">
         <h1>👑 恭喜成為寶可夢數學大師！</h1>
         <div class="badge-img">🏆</div>
@@ -280,7 +334,6 @@
         <div class="cloud-status">
             <div class="status-dot" id="cloudStatusDot"></div>
             <span id="cloudStatusText">離線模式</span>
-            <button id="authBtn" class="auth-btn" onclick="toggleAuth()">登入</button>
         </div>
         <div class="top-bar">
             <div class="lights-left">
@@ -291,6 +344,7 @@
                     <div class="light green"></div>
                 </div>
             </div>
+            <!-- 音樂開關 -->
             <div class="music-btn" id="musicToggle" onclick="toggleMusic()">
                 🎵 BGM: OFF
             </div>
@@ -327,113 +381,15 @@
         <div class="pokemon-grid" id="pcGrid"></div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-
-        // Firebase Config
-        const firebaseConfig = {
-            apiKey: "AIzaSyDJFzG3RrCkJBx5B23lBVcoOHmaqZ2dAYA",
-            authDomain: "forgemini-7349a.firebaseapp.com",
-            projectId: "forgemini-7349a",
-            storageBucket: "forgemini-7349a.firebasestorage.app",
-            messagingSenderId: "865250968546",
-            appId: "1:865250968546:web:fc3ded71179b709d422fbb"
-        };
-
-        window.Cloud = {
-            db: null,
-            user: null,
-            auth: null,
-            appId: 'poke-math-default',
-            
-            init: async () => {
-                try {
-                    const app = initializeApp(firebaseConfig);
-                    window.Cloud.auth = getAuth(app);
-                    window.Cloud.db = getFirestore(app);
-                    const provider = new GoogleAuthProvider();
-                    
-                    onAuthStateChanged(window.Cloud.auth, (u) => {
-                        window.Cloud.user = u;
-                        const btn = document.getElementById('authBtn');
-                        const statusText = document.getElementById('cloudStatusText');
-                        const statusDot = document.getElementById('cloudStatusDot');
-
-                        if (u) {
-                            statusDot.classList.add('online');
-                            statusText.innerText = `訓練家: ${u.displayName}`;
-                            btn.innerText = "登出";
-                            btn.classList.add('logged-in');
-                            window.Cloud.load(); 
-                        } else {
-                            statusDot.classList.remove('online');
-                            statusText.innerText = "離線模式";
-                            btn.innerText = "登入雲端";
-                            btn.classList.remove('logged-in');
-                        }
-                    });
-
-                    window.toggleAuth = async () => {
-                        if (window.Cloud.user) {
-                            await signOut(window.Cloud.auth);
-                            location.reload();
-                        } else {
-                            try {
-                                await signInWithPopup(window.Cloud.auth, provider);
-                            } catch(e) {
-                                alert("登入失敗: " + e.message);
-                            }
-                        }
-                    };
-
-                } catch (e) {
-                    console.error("Cloud Init Error:", e);
-                    document.getElementById('cloudStatusText').innerText = "連線異常";
-                }
-            },
-
-            save: async (caughtArray) => {
-                if (!window.Cloud.db || !window.Cloud.user) return;
-                try {
-                    const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
-                    await setDoc(doc(window.Cloud.db, path, 'saveFile'), { 
-                        caughtList: caughtArray,
-                        lastUpdated: serverTimestamp() 
-                    });
-                } catch (e) {
-                    console.error("Save Failed:", e);
-                }
-            },
-
-            load: () => {
-                if (!window.Cloud.db || !window.Cloud.user) return;
-                const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
-                onSnapshot(doc(window.Cloud.db, path, 'saveFile'), (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data();
-                        if (data && data.caughtList) {
-                            window.caughtPokemon = new Set(data.caughtList);
-                            localStorage.setItem('poke_math_save_v2', JSON.stringify(data.caughtList));
-                            if (typeof window.renderPC === 'function') window.renderPC();
-                        }
-                    }
-                });
-            }
-        };
-        
-        window.Cloud.init();
-    </script>
-
     <script>
-        // 音效系統
+        // --- 音效與 BGM 系統 (Web Audio API) ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let isMusicOn = false;
         let nextNoteTime = 0;
         let noteIndex = 0;
         let bgmTimerID = null;
 
+        // 頻率對照表
         const Notes = {
             'G2': 98.00, 'G#2': 103.83, 'A2': 110.00, 'A#2': 116.54, 'B2': 123.47,
             'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
@@ -442,20 +398,27 @@
             'C6': 1046.50, 'G5': 783.99, 'F#5': 739.99, 'F5': 698.46, 'E5': 659.25, 'D#5': 622.25, 'D5': 587.33, 'C#5': 554.37
         };
 
+        // 8-bit 戰鬥音樂數據 (模仿經典野外戰鬥 BGM)
         const SongData = {
-            tempo: 180, 
+            tempo: 180, // BPM 提升到 180
             intro: [
+                // Rapid Arpeggios (模擬開場的快速掃弦，更緊湊)
                 {n: 'G5', d: 0.06}, {n: 'F#5', d: 0.06}, {n: 'F5', d: 0.06}, {n: 'E5', d: 0.06},
                 {n: 'D#5', d: 0.06}, {n: 'D5', d: 0.06}, {n: 'C#5', d: 0.06}, {n: 'C5', d: 0.06},
                 {n: 'B4', d: 0.06}, {n: 'A#4', d: 0.06}, {n: 'A4', d: 0.06}, {n: 'G#4', d: 0.06},
+                // Heavy Hits
                 {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125},
                 {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125},
             ],
             loop: [
+                // Driving Bassline (雙倍速度的八分音符，模擬緊湊感)
+                // Bar 1: G pulsing
                 {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G3', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
                 {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G3', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
+                // Bar 2: Tension
                 {n: 'C4', d: 0.125, type: 'sawtooth'}, {n: 'A#3', d: 0.125, type: 'sawtooth'}, {n: 'A3', d: 0.125, type: 'sawtooth'}, {n: 'G#3', d: 0.125, type: 'sawtooth'},
                 {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
+                // Bar 3: Chord Stabs
                 {n: 'C5', d: 0.125, type: 'sawtooth'}, {n: 'B4', d: 0.125, type: 'sawtooth'}, {n: 'A#4', d: 0.125, type: 'sawtooth'}, {n: 'A4', d: 0.125, type: 'sawtooth'},
                 {n: 'G#4', d: 0.125, type: 'sawtooth'}, {n: 'G4', d: 0.125, type: 'sawtooth'}, {n: 'F#4', d: 0.125, type: 'sawtooth'}, {n: 'F4', d: 0.125, type: 'sawtooth'},
             ]
@@ -463,7 +426,7 @@
 
         const RetroBGM = {
             isPlaying: false,
-            currentSection: 'intro',
+            currentSection: 'intro', // intro or loop
             currentIndex: 0,
             
             play: () => {
@@ -477,28 +440,40 @@
 
             scheduler: () => {
                 if (!RetroBGM.isPlaying) return;
+                
+                // 預先排程 0.1 秒內的音符
                 while (nextNoteTime < audioCtx.currentTime + 0.1) {
                     RetroBGM.scheduleNote();
                 }
+                
                 bgmTimerID = setTimeout(RetroBGM.scheduler, 25);
             },
 
             scheduleNote: () => {
                 const section = SongData[RetroBGM.currentSection];
                 const noteData = section[RetroBGM.currentIndex];
+                
                 if (noteData) {
                     const freq = Notes[noteData.n];
                     const type = noteData.type || 'square';
+                    // Sawtooth 音色較尖銳，稍微調小聲一點
                     const volume = type === 'sawtooth' ? 0.05 : 0.08;
+                    
                     playOscillator(freq, type, noteData.d, nextNoteTime, volume);
+                    
+                    // 計算下一個音符時間 (60 / BPM * 4 * duration) 
+                    // 這裡 duration 1.0 為全音符，0.25 為四分音符
                     const secondsPerBeat = 60.0 / SongData.tempo;
                     nextNoteTime += noteData.d * secondsPerBeat * 4;
+                    
                     RetroBGM.currentIndex++;
                 } else {
+                    // 該段落結束
                     if (RetroBGM.currentSection === 'intro') {
                         RetroBGM.currentSection = 'loop';
                         RetroBGM.currentIndex = 0;
                     } else {
+                        // Loop 結束，重頭
                         RetroBGM.currentIndex = 0;
                     }
                 }
@@ -515,8 +490,12 @@
             const gain = audioCtx.createGain();
             osc.type = type;
             osc.frequency.value = freq;
+            
+            // Envelope: 短促的斷奏效果
             gain.gain.setValueAtTime(vol, time);
+            // 快速衰減，製造打擊感 (staccato)
             gain.gain.exponentialRampToValueAtTime(0.01, time + (durationNote * 60/SongData.tempo * 4) * 0.8);
+            
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start(time);
@@ -557,10 +536,13 @@
         function toggleMusic() {
             isMusicOn = !isMusicOn;
             const btn = document.getElementById('musicToggle');
+            
             if (audioCtx.state === 'suspended') audioCtx.resume();
+
             if (isMusicOn) {
                 btn.innerText = "🎵 BGM: ON";
                 btn.classList.add('active');
+                // 如果在戰鬥中，開始播放
                 if (document.getElementById('problemCard').style.display !== 'none') {
                     RetroBGM.play();
                 }
@@ -571,6 +553,7 @@
             }
         }
 
+        // --- 寶可夢資料 ---
         const CURATED_POKEMON = [
             {id: 1, name: "妙蛙種子"}, {id: 4, name: "小火龍"}, {id: 6, name: "噴火龍"}, {id: 7, name: "傑尼龜"}, {id: 9, name: "水箭龜"}, {id: 25, name: "皮卡丘"}, {id: 39, name: "胖丁"}, {id: 52, name: "喵喵"}, {id: 54, name: "可達鴨"}, {id: 59, name: "風速狗"}, {id: 63, name: "凱西"}, {id: 68, name: "怪力"}, {id: 94, name: "耿鬼"}, {id: 129, name: "鯉魚王"}, {id: 130, name: "暴鯉龍"}, {id: 131, name: "拉普拉斯"}, {id: 132, name: "百變怪"}, {id: 133, name: "伊布"}, {id: 134, name: "水伊布"}, {id: 135, name: "雷伊布"}, {id: 136, name: "火伊布"}, {id: 143, name: "卡比獸"}, {id: 149, name: "快龍"}, {id: 150, name: "超夢"}, {id: 151, name: "夢幻"},
             {id: 152, name: "菊草葉"}, {id: 155, name: "火球鼠"}, {id: 158, name: "小鋸鱷"}, {id: 175, name: "波克比"}, {id: 196, name: "太陽伊布"}, {id: 197, name: "月亮伊布"}, {id: 202, name: "果然翁"}, {id: 212, name: "巨鉗螳螂"}, {id: 248, name: "班基拉斯"}, {id: 249, name: "洛奇亞"}, {id: 250, name: "鳳王"},
@@ -589,12 +572,15 @@
         }
         POKEMON_DB = POKEMON_DB.slice(0, 100);
 
+        // 將 caughtPokemon 提升到 window 層級，方便 Firebase 更新
         window.caughtPokemon = new Set();
+        
         let currentProblem = null;
         let currentPokemon = null;
         let mistakeCount = 0;
         const MAX_MISTAKES = 2;
 
+        // --- 數學邏輯 ---
         const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
         const lcm = (a, b) => (a * b) / gcd(a, b);
         const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -613,7 +599,7 @@
                 p.n1 = randInt(1, p.d1 - 1); p.n2 = randInt(1, p.d2 - 1);
                 p.op = Math.random() > 0.5 ? '+' : '-';
                 if (p.op === '-') { if ((p.n1/p.d1) < (p.n2/p.d2)) [p.n1, p.d1, p.n2, p.d2] = [p.n2, p.d2, p.n1, p.d1]; }
-                
+               
                 let gcd1 = gcd(p.n1, p.d1); let gcd2 = gcd(p.n2, p.d2);
                 p.needsSimplify = (gcd1 > 1 || gcd2 > 1);
                 p.s_n1 = p.n1 / gcd1; p.s_d1 = p.d1 / gcd1; p.s_n2 = p.n2 / gcd2; p.s_d2 = p.d2 / gcd2;
@@ -621,6 +607,7 @@
                 let commonFactor = gcd(p.s_d1, p.s_d2);
                 p.strategy = (commonFactor === 1) ? 'cross' : 'lcm';
                 p.commonDenom = (commonFactor === 1) ? p.s_d1 * p.s_d2 : lcm(p.s_d1, p.s_d2);
+
                 if (p.commonDenom >= 100) continue;
 
                 p.c_n1 = p.s_n1 * (p.commonDenom / p.s_d1); p.c_n2 = p.s_n2 * (p.commonDenom / p.s_d2);
@@ -632,9 +619,12 @@
             return p;
         }
 
+        // --- 存檔相關函式 ---
         function saveGame() {
+            // 1. 存本機
             const arr = Array.from(window.caughtPokemon);
             localStorage.setItem('poke_math_save_v2', JSON.stringify(arr));
+            // 2. 存雲端 (如果有連線)
             if (window.Cloud && window.Cloud.save) {
                 window.Cloud.save(arr);
             }
@@ -649,10 +639,13 @@
             }
         }
 
+        // --- 遊戲流程 ---
         function init() {
-            loadLocalSave();
+            loadLocalSave(); // 先載入本機
             renderPC();
             document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="spawnPokemon()">尋找寶可夢</button>`;
+           
+            // 首次點擊啟用 AudioContext (for SFX & BGM)
             document.body.addEventListener('click', function resumeAudio() {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
             }, { once: true });
@@ -664,10 +657,13 @@
             mistakeCount = 0; updateMistakeUI();
             let available = POKEMON_DB.filter(p => !window.caughtPokemon.has(p.id));
             if (available.length === 0) {
-                if (window.caughtPokemon.size < 100) available = POKEMON_DB; 
-                else { showVictory(); return; }
+                if (window.caughtPokemon.size < 100) {
+                     available = POKEMON_DB; 
+                } else {
+                    showVictory(); return; 
+                }
             }
-            
+           
             currentPokemon = available[Math.floor(Math.random() * available.length)];
             currentProblem = generateProblem();
 
@@ -678,9 +674,15 @@
 
             document.getElementById('problemCard').style.display = 'none';
             document.getElementById('dialogBox').innerHTML = `野生的 <span style="color:#FFCB05">???</span> 出現了！<br>氣場似乎很強大...`;
-            document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="startBattle()">準備戰鬥</button>`;
+           
+            document.getElementById('actionArea').innerHTML = `
+                <button class="btn-action" onclick="startBattle()">準備戰鬥</button>
+            `;
 
-            if (isMusicOn) RetroBGM.play();
+            // 如果音樂是開的，開始播放戰鬥 BGM
+            if (isMusicOn) {
+                RetroBGM.play();
+            }
         }
 
         function startBattle() {
@@ -701,7 +703,7 @@
 
             if (mistakeCount >= MAX_MISTAKES) {
                 Sound.playRunAway();
-                RetroBGM.stop();
+                RetroBGM.stop(); // 停止 BGM
                 document.getElementById('pokemonImg').classList.add('run-away');
                 document.getElementById('problemCard').style.display = 'none';
                 document.getElementById('dialogBox').innerHTML = `糟糕！失誤太多次！<br><b>${currentPokemon.name}</b> 逃跑了！`;
@@ -809,15 +811,17 @@
 
             if (n === p.finalNum && d === p.finalDen) {
                 Sound.playThrow();
-                RetroBGM.stop();
+                RetroBGM.stop(); // 抓到時停止 BGM
                 const ball = document.getElementById('pokeballThrow'), pkm = document.getElementById('pokemonImg');
                 ball.style.display = 'block'; ball.style.top = '50%'; ball.style.left = '50%'; ball.style.transform = 'translate(-50%, -50%) scale(0.5)';
                 ball.animate([{ top: '50%', transform: 'translate(-50%, -50%) scale(0.5)' }, { top: '30%', transform: 'translate(-50%, -50%) scale(1)' }], { duration: 500, fill: 'forwards' }).onfinish = () => {
                     pkm.classList.add('captured');
                     setTimeout(() => {
                         Sound.playCaught(); ball.style.display = 'none'; 
+                        
                         window.caughtPokemon.add(currentPokemon.id);
-                        saveGame(); 
+                        saveGame(); // 這裡會觸發雲端存檔
+
                         document.getElementById('dialogBox').innerHTML = `太棒了！<br>成功收服 <b>${currentPokemon.name}</b>！`;
                         document.getElementById('problemCard').style.display = 'none';
                         document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="spawnPokemon()">下一隻</button>`;
@@ -837,10 +841,12 @@
             `;
         }
 
+        // 將 renderPC 綁定到 window 以便雲端載入時呼叫
         window.renderPC = function() {
             const grid = document.getElementById('pcGrid'); 
             grid.innerHTML = '';
             document.getElementById('caughtCount').innerText = window.caughtPokemon.size;
+            
             POKEMON_DB.forEach(pkm => {
                 const isCaught = window.caughtPokemon.has(pkm.id);
                 const div = document.createElement('div'); 
@@ -852,13 +858,7 @@
 
         function showVictory() { document.getElementById('victoryModal').style.display = 'flex'; Sound.playCaught(); }
 
-        // 啟動遊戲
-        try {
-            init();
-        } catch(e) {
-            console.error(e);
-            alert("遊戲初始化失敗，請重新整理頁面。");
-        }
+        init();
     </script>
 </body>
 </html>
