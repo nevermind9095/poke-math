@@ -579,4 +579,286 @@
             {id: 495, name: "藤藤蛇"}, {id: 501, name: "水水獺"}, {id: 571, name: "索羅亞克"}, {id: 609, name: "水晶燈火靈"},
             {id: 650, name: "哈力栗"}, {id: 653, name: "火狐狸"}, {id: 656, name: "呱呱泡蛙"}, {id: 658, name: "甲賀忍蛙"}, {id: 700, name: "仙子伊布"},
             {id: 722, name: "木木梟"}, {id: 725, name: "火斑喵"}, {id: 728, name: "球球海獅"}, {id: 778, name: "謎擬Q"}, {id: 791, name: "索爾迦雷歐"}, {id: 792, name: "露奈雅拉"},
-            {id: 810, name: "敲音猴"}, {id: 813, name: "炎兔兒"}, {id: 81
+            {id: 810, name: "敲音猴"}, {id: 813, name: "炎兔兒"}, {id: 816, name: "淚眼蜥"}, {id: 888, name: "蒼響"}, {id: 889, name: "藏瑪然特"},
+            {id: 906, name: "新葉喵"}, {id: 909, name: "呆火鱷"}, {id: 912, name: "潤水鴨"}, {id: 1008, name: "密勒頓"}, {id: 1007, name: "故勒頓"}
+        ];
+
+        let POKEMON_DB = [...CURATED_POKEMON];
+        while(POKEMON_DB.length < 100) {
+            POKEMON_DB.push(CURATED_POKEMON[Math.floor(Math.random() * CURATED_POKEMON.length)]);
+        }
+        POKEMON_DB = POKEMON_DB.slice(0, 100);
+
+        window.caughtPokemon = new Set();
+        let currentProblem = null;
+        let currentPokemon = null;
+        let mistakeCount = 0;
+        const MAX_MISTAKES = 2;
+
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const lcm = (a, b) => (a * b) / gcd(a, b);
+        const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+        function generateProblem() {
+            let p = {};
+            let isValid = false;
+            let attempts = 0;
+            const count = window.caughtPokemon.size;
+            let minDen = 2, maxDen = count < 12 ? 12 : (count < 30 ? 30 : 99);
+
+            while (!isValid && attempts < 500) {
+                attempts++;
+                p.d1 = randInt(minDen, maxDen); p.d2 = randInt(minDen, maxDen);
+                if (p.d1 === p.d2) continue;
+                p.n1 = randInt(1, p.d1 - 1); p.n2 = randInt(1, p.d2 - 1);
+                p.op = Math.random() > 0.5 ? '+' : '-';
+                if (p.op === '-') { if ((p.n1/p.d1) < (p.n2/p.d2)) [p.n1, p.d1, p.n2, p.d2] = [p.n2, p.d2, p.n1, p.d1]; }
+                
+                let gcd1 = gcd(p.n1, p.d1); let gcd2 = gcd(p.n2, p.d2);
+                p.needsSimplify = (gcd1 > 1 || gcd2 > 1);
+                p.s_n1 = p.n1 / gcd1; p.s_d1 = p.d1 / gcd1; p.s_n2 = p.n2 / gcd2; p.s_d2 = p.d2 / gcd2;
+
+                let commonFactor = gcd(p.s_d1, p.s_d2);
+                p.strategy = (commonFactor === 1) ? 'cross' : 'lcm';
+                p.commonDenom = (commonFactor === 1) ? p.s_d1 * p.s_d2 : lcm(p.s_d1, p.s_d2);
+                if (p.commonDenom >= 100) continue;
+
+                p.c_n1 = p.s_n1 * (p.commonDenom / p.s_d1); p.c_n2 = p.s_n2 * (p.commonDenom / p.s_d2);
+                let rawNum = (p.op === '+') ? (p.c_n1 + p.c_n2) : (p.c_n1 - p.c_n2);
+                let finalGcd = gcd(rawNum, p.commonDenom);
+                p.finalNum = rawNum / finalGcd; p.finalDen = p.commonDenom / finalGcd;
+                isValid = true;
+            }
+            return p;
+        }
+
+        function saveGame() {
+            const arr = Array.from(window.caughtPokemon);
+            localStorage.setItem('poke_math_save_v2', JSON.stringify(arr));
+            if (window.Cloud && window.Cloud.save) {
+                window.Cloud.save(arr);
+            }
+            renderPC();
+        }
+
+        function loadLocalSave() {
+            const saved = localStorage.getItem('poke_math_save_v2');
+            if (saved) {
+                window.caughtPokemon = new Set(JSON.parse(saved));
+                renderPC();
+            }
+        }
+
+        function init() {
+            loadLocalSave();
+            renderPC();
+            document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="spawnPokemon()">尋找寶可夢</button>`;
+            document.body.addEventListener('click', function resumeAudio() {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }, { once: true });
+        }
+
+        function spawnPokemon() {
+            if (window.caughtPokemon.size >= 100) { showVictory(); return; }
+
+            mistakeCount = 0; updateMistakeUI();
+            let available = POKEMON_DB.filter(p => !window.caughtPokemon.has(p.id));
+            if (available.length === 0) {
+                if (window.caughtPokemon.size < 100) available = POKEMON_DB; 
+                else { showVictory(); return; }
+            }
+            
+            currentPokemon = available[Math.floor(Math.random() * available.length)];
+            currentProblem = generateProblem();
+
+            const img = document.getElementById('pokemonImg');
+            img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentPokemon.id}.png`;
+            img.className = "pokemon-img silhouette bounce";
+            img.style.opacity = "1"; img.style.transform = "scale(1)";
+
+            document.getElementById('problemCard').style.display = 'none';
+            document.getElementById('dialogBox').innerHTML = `野生的 <span style="color:#FFCB05">???</span> 出現了！<br>氣場似乎很強大...`;
+            document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="startBattle()">準備戰鬥</button>`;
+
+            if (isMusicOn) RetroBGM.play();
+        }
+
+        function startBattle() {
+            document.getElementById('pokemonImg').classList.remove('silhouette');
+            document.getElementById('problemCard').style.display = 'flex';
+            renderProblemDisplay(currentProblem.n1, currentProblem.d1, currentProblem.n2, currentProblem.d2, currentProblem.op);
+            document.getElementById('dialogBox').innerHTML = `是 <b>${currentPokemon.name}</b>！<br>觀察題目，需要先「約分」嗎？`;
+            document.getElementById('actionArea').innerHTML = `
+                <button class="btn-action" onclick="checkSimplify(true)">需要約分</button>
+                <button class="btn-action" onclick="checkSimplify(false)">不需約分</button>
+            `;
+        }
+
+        function handleMistake(msg) {
+            Sound.playWrong(); mistakeCount++; updateMistakeUI();
+            const screen = document.querySelector('.battle-screen');
+            screen.classList.remove('shake-anim'); void screen.offsetWidth; screen.classList.add('shake-anim');
+
+            if (mistakeCount >= MAX_MISTAKES) {
+                Sound.playRunAway();
+                RetroBGM.stop();
+                document.getElementById('pokemonImg').classList.add('run-away');
+                document.getElementById('problemCard').style.display = 'none';
+                document.getElementById('dialogBox').innerHTML = `糟糕！失誤太多次！<br><b>${currentPokemon.name}</b> 逃跑了！`;
+                document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="spawnPokemon()">尋找下一隻</button>`;
+            } else {
+                document.getElementById('dialogBox').innerHTML = `${msg}<br>小心！再錯一次它就會逃跑！`;
+            }
+        }
+
+        function updateMistakeUI() {
+            document.getElementById('mistake1').className = mistakeCount >= 1 ? 'mistake-dot active' : 'mistake-dot';
+            document.getElementById('mistake2').className = mistakeCount >= 2 ? 'mistake-dot active' : 'mistake-dot';
+        }
+
+        function checkSimplify(userChoice) {
+            if (mistakeCount >= MAX_MISTAKES) return;
+            if (userChoice === currentProblem.needsSimplify) {
+                Sound.playCorrect();
+                if (userChoice) {
+                    document.getElementById('dialogBox').innerHTML = "判斷正確！<br>請輸入約分後的「最簡分數」：";
+                    renderInputMode('simplify');
+                } else {
+                    document.getElementById('dialogBox').innerHTML = "正確！這已經是最簡分數。<br>接著選擇通分策略！";
+                    setTimeout(renderStrategyStep, 1000);
+                }
+            } else {
+                handleMistake(userChoice ? "這題已經最簡囉，不需要約分。" : "看仔細！還有公因數可以約分喔！");
+            }
+        }
+
+        function renderStrategyStep() {
+            const p = currentProblem;
+            renderProblemDisplay(p.s_n1, p.s_d1, p.s_n2, p.s_d2, p.op);
+            document.getElementById('dialogBox').innerHTML = "請選擇通分策略：";
+            document.getElementById('actionArea').innerHTML = `
+                <button class="btn-action" onclick="checkStrategy('cross')">分母互乘<br><small>(無公因數)</small></button>
+                <button class="btn-action" onclick="checkStrategy('lcm')">找最小公倍數<br><small>(有公因數)</small></button>
+            `;
+        }
+
+        function checkStrategy(choice) {
+            if (mistakeCount >= MAX_MISTAKES) return;
+            if (choice === currentProblem.strategy) {
+                Sound.playCorrect();
+                document.getElementById('dialogBox').innerHTML = "策略正確！<br>請算出通分後的分子分母：";
+                renderInputMode('common');
+            } else {
+                let hint = currentProblem.strategy === 'cross' ? "分母沒有公因數喔，直接互乘吧！" : "分母有公因數，找最小公倍數數字比較小喔！";
+                handleMistake("策略選錯囉！<br>" + hint);
+            }
+        }
+
+        function renderInputMode(mode) {
+            const p = currentProblem;
+            document.getElementById('actionArea').innerHTML = `
+                <div class="input-mode-container">
+                    <div class="fraction"><div class="numerator"><input type="number" id="i_n1"></div><div class="denominator"><input type="number" id="i_d1"></div></div>
+                    <span style="font-size:1.5rem; margin:0 5px;">${p.op}</span>
+                    <div class="fraction"><div class="numerator"><input type="number" id="i_n2"></div><div class="denominator"><input type="number" id="i_d2"></div></div>
+                    <button class="btn-action" onclick="verifyInput('${mode}')">攻擊！</button>
+                </div>
+            `;
+        }
+
+        function verifyInput(mode) {
+            if (mistakeCount >= MAX_MISTAKES) return;
+            const n1 = parseInt(document.getElementById('i_n1').value), d1 = parseInt(document.getElementById('i_d1').value);
+            const n2 = parseInt(document.getElementById('i_n2').value), d2 = parseInt(document.getElementById('i_d2').value);
+            const p = currentProblem;
+
+            let isCorrect = false;
+            if (mode === 'simplify') isCorrect = (n1 === p.s_n1 && d1 === p.s_d1 && n2 === p.s_n2 && d2 === p.s_d2);
+            else if (mode === 'common') isCorrect = (d1 === p.commonDenom && d2 === p.commonDenom && n1 === p.c_n1 && n2 === p.c_n2);
+
+            if (isCorrect) {
+                Sound.playCorrect();
+                if (mode === 'simplify') {
+                    document.getElementById('dialogBox').innerHTML = "約分成功！防禦降低了！<br>接著選擇通分策略！";
+                    setTimeout(renderStrategyStep, 1000);
+                } else {
+                    document.getElementById('dialogBox').innerHTML = "通分成功！要害出現！<br>計算最後答案並丟出精靈球！<br><span style='font-size:0.8rem; color:#FFFF00'>(請檢察輸入的答案是否已為不能再約分的分數)</span>";
+                    setTimeout(renderFinalStep, 1000);
+                }
+            } else {
+                handleMistake("數字算錯囉！請再檢查一次計算。");
+            }
+        }
+
+        function renderFinalStep() {
+            const p = currentProblem;
+            renderProblemDisplay(p.c_n1, p.commonDenom, p.c_n2, p.commonDenom, p.op);
+            document.getElementById('actionArea').innerHTML = `
+                <div class="input-mode-container">
+                    <span style="font-weight:bold; margin-right:10px;">答案：</span>
+                    <div class="fraction"><div class="numerator"><input type="number" id="f_n"></div><div class="denominator"><input type="number" id="f_d"></div></div>
+                    <button class="btn-action" style="background:#FF3E3E; color:white;" onclick="verifyFinal()">丟球！</button>
+                </div>
+            `;
+        }
+
+        function verifyFinal() {
+            if (mistakeCount >= MAX_MISTAKES) return;
+            const n = parseInt(document.getElementById('f_n').value), d = parseInt(document.getElementById('f_d').value);
+            const p = currentProblem;
+
+            if (n === p.finalNum && d === p.finalDen) {
+                Sound.playThrow();
+                RetroBGM.stop();
+                const ball = document.getElementById('pokeballThrow'), pkm = document.getElementById('pokemonImg');
+                ball.style.display = 'block'; ball.style.top = '50%'; ball.style.left = '50%'; ball.style.transform = 'translate(-50%, -50%) scale(0.5)';
+                ball.animate([{ top: '50%', transform: 'translate(-50%, -50%) scale(0.5)' }, { top: '30%', transform: 'translate(-50%, -50%) scale(1)' }], { duration: 500, fill: 'forwards' }).onfinish = () => {
+                    pkm.classList.add('captured');
+                    setTimeout(() => {
+                        Sound.playCaught(); ball.style.display = 'none'; 
+                        window.caughtPokemon.add(currentPokemon.id);
+                        saveGame(); 
+                        document.getElementById('dialogBox').innerHTML = `太棒了！<br>成功收服 <b>${currentPokemon.name}</b>！`;
+                        document.getElementById('problemCard').style.display = 'none';
+                        document.getElementById('actionArea').innerHTML = `<button class="btn-action" onclick="spawnPokemon()">下一隻</button>`;
+                    }, 1000);
+                };
+            } else {
+                handleMistake("答案錯誤！精靈球彈開了！<br><span style='font-size:0.9rem'>(請檢察輸入的答案是否已為不能再約分的分數)</span>");
+            }
+        }
+
+        function renderProblemDisplay(n1, d1, n2, d2, op) {
+            document.getElementById('problemCard').innerHTML = `
+                <div class="fraction"><div class="numerator">${n1}</div><div class="denominator">${d1}</div></div>
+                <div style="margin:0 5px">${op}</div>
+                <div class="fraction"><div class="numerator">${n2}</div><div class="denominator">${d2}</div></div>
+                <div style="margin-left:5px">= ?</div>
+            `;
+        }
+
+        window.renderPC = function() {
+            const grid = document.getElementById('pcGrid'); 
+            grid.innerHTML = '';
+            document.getElementById('caughtCount').innerText = window.caughtPokemon.size;
+            POKEMON_DB.forEach(pkm => {
+                const isCaught = window.caughtPokemon.has(pkm.id);
+                const div = document.createElement('div'); 
+                div.className = `grid-item ${isCaught ? 'caught' : 'unknown'}`;
+                div.innerHTML = `<img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pkm.id}.png" loading="lazy"><div class="name-tag">${isCaught ? pkm.name : '???'}</div>`;
+                grid.appendChild(div);
+            });
+        }
+
+        function showVictory() { document.getElementById('victoryModal').style.display = 'flex'; Sound.playCaught(); }
+
+        // 啟動遊戲
+        try {
+            init();
+        } catch(e) {
+            console.error(e);
+            alert("遊戲初始化失敗，請重新整理頁面。");
+        }
+    </script>
+</body>
+</html>
