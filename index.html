@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>寶可夢數學大師 - 異分母分數 (最終完美版)</title>
+    <title>寶可夢數學大師 - 異分母分數 (排版修復版)</title>
     <style>
         :root {
             --poke-red: #FF3E3E;
@@ -50,13 +50,12 @@
             border: 4px solid var(--poke-black);
         }
 
-        /* 頂部控制列 */
+        /* 頂部控制列 (Flex 佈局) */
         .top-bar {
             display: flex;
-            align-items: center;
+            align-items: flex-start; /* 靠上對齊 */
             justify-content: space-between;
             margin-bottom: 15px;
-            flex-wrap: wrap;
             gap: 10px;
         }
         
@@ -66,13 +65,13 @@
             gap: 10px;
         }
 
-        /* 右上角控制區群組 (修正重疊問題) */
+        /* 右上角控制區群組 (改為垂直堆疊，靠右對齊) */
         .top-right-group {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
+            flex-direction: column; /* 垂直排列 */
+            align-items: flex-end;  /* 靠右對齊 */
+            gap: 6px;               /* 按鈕之間的間距 */
+            z-index: 20;
         }
 
         .camera-lens {
@@ -116,15 +115,17 @@
             background: #222;
             color: #4DEEEE;
             border: 2px solid #444;
-            border-radius: 20px; /* 圓角一致 */
-            padding: 6px 12px;
-            font-size: 0.8rem;
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
             cursor: pointer;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 5px;
             box-shadow: inset 0 0 5px #000;
             white-space: nowrap;
+            width: fit-content;
         }
         .music-btn.active {
             background: #4DEEEE;
@@ -132,18 +133,18 @@
             box-shadow: 0 0 10px #4DEEEE;
         }
         
-        /* 雲端狀態列 (修正樣式) */
+        /* 雲端狀態列 */
         .cloud-status {
-            /* 移除原本的 absolute 定位 */
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: white;
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(0, 0, 0, 0.2); /* 增加底色 */
-            padding: 4px 10px;
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.2);
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: 5px;
+            border: 1px solid rgba(255,255,255,0.3);
+            width: fit-content;
         }
         
         .status-dot {
@@ -156,11 +157,11 @@
             background: #444;
             color: white;
             border: 1px solid #fff;
-            border-radius: 4px;
-            padding: 2px 8px;
-            font-size: 0.75rem;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 0.7rem;
             cursor: pointer;
-            margin-left: 5px;
+            margin-left: 4px;
         }
         .auth-btn.logged-in {
             background: #4caf50;
@@ -305,7 +306,7 @@
             <div class="top-right-group">
                 <div class="cloud-status">
                     <div class="status-dot" id="cloudStatusDot"></div>
-                    <span id="cloudStatusText">離線模式</span>
+                    <span id="cloudStatusText">離線</span>
                     <button id="authBtn" class="auth-btn" onclick="toggleAuth()">登入</button>
                 </div>
                 <div class="music-btn" id="musicToggle" onclick="toggleMusic()">
@@ -381,8 +382,10 @@
 
                         if (u) {
                             statusDot.classList.add('online');
-                            // 名字太長可以截斷，避免破版
-                            statusText.innerText = `${u.displayName.substring(0,6)}`;
+                            // 名字太長截斷
+                            let name = u.displayName || "訓練家";
+                            if (name.length > 6) name = name.substring(0,6) + "..";
+                            statusText.innerText = name;
                             btn.innerText = "登出";
                             btn.classList.add('logged-in');
                             window.Cloud.load(); 
@@ -409,7 +412,7 @@
 
                 } catch (e) {
                     console.error("Cloud Init Error:", e);
-                    document.getElementById('cloudStatusText').innerText = "連線異常";
+                    document.getElementById('cloudStatusText').innerText = "異常";
                 }
             },
 
