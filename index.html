@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>寶可夢數學大師 - 異分母分數 (雲端同步版)</title>
+    <title>寶可夢數學大師 - 異分母分數 (修復版)</title>
     <style>
         :root {
             --poke-red: #FF3E3E;
@@ -269,6 +269,273 @@
 </head>
 <body>
 
+    <div class="victory-modal" id="victoryModal">
+        <h1>👑 恭喜成為寶可夢數學大師！</h1>
+        <div class="badge-img">🏆</div>
+        <h2>你已經收服了所有 100 隻寶可夢！</h2>
+        <button class="btn-action" onclick="location.reload()">重新開始冒險</button>
+    </div>
+
+    <div class="pokedex-container">
+        <div class="cloud-status">
+            <div class="status-dot" id="cloudStatusDot"></div>
+            <span id="cloudStatusText">離線模式</span>
+            <button id="authBtn" class="auth-btn" onclick="toggleAuth()">登入</button>
+        </div>
+        <div class="top-bar">
+            <div class="lights-left">
+                <div class="camera-lens"></div>
+                <div class="small-lights">
+                    <div class="light red"></div>
+                    <div class="light yellow"></div>
+                    <div class="light green"></div>
+                </div>
+            </div>
+            <div class="music-btn" id="musicToggle" onclick="toggleMusic()">
+                🎵 BGM: OFF
+            </div>
+        </div>
+
+        <div class="screen-border">
+            <div class="battle-screen">
+                <div class="mistake-indicators">
+                    <div class="mistake-dot" id="mistake1"></div>
+                    <div class="mistake-dot" id="mistake2"></div>
+                </div>
+
+                <div class="pokemon-display">
+                    <div class="battle-platform"></div>
+                    <img id="pokemonImg" src="" class="pokemon-img silhouette bounce" alt="Pokemon">
+                    <div id="pokeballThrow" class="pokeball-throw"></div>
+                </div>
+
+                <div class="problem-float" id="problemCard" style="display:none;"></div>
+            </div>
+
+            <div class="control-panel">
+                <div class="dialog-box" id="dialogBox">系統啟動中...</div>
+                <div class="action-buttons" id="actionArea"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pc-box">
+        <div class="pc-title">
+            <span>📦 寶可夢盒子</span>
+            <span>完成度: <span id="caughtCount">0</span>/100</span>
+        </div>
+        <div class="pokemon-grid" id="pcGrid"></div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getAuth, signInWithPopup
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJFzG3RrCkJBx5B23lBVcoOHmaqZ2dAYA",
+            authDomain: "forgemini-7349a.firebaseapp.com",
+            projectId: "forgemini-7349a",
+            storageBucket: "forgemini-7349a.firebasestorage.app",
+            messagingSenderId: "865250968546",
+            appId: "1:865250968546:web:fc3ded71179b709d422fbb"
+        };
+
+        window.Cloud = {
+            db: null,
+            user: null,
+            auth: null,
+            appId: 'poke-math-default',
+            
+            init: async () => {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    window.Cloud.auth = getAuth(app);
+                    window.Cloud.db = getFirestore(app);
+                    const provider = new GoogleAuthProvider();
+                    
+                    onAuthStateChanged(window.Cloud.auth, (u) => {
+                        window.Cloud.user = u;
+                        const btn = document.getElementById('authBtn');
+                        const statusText = document.getElementById('cloudStatusText');
+                        const statusDot = document.getElementById('cloudStatusDot');
+
+                        if (u) {
+                            statusDot.classList.add('online');
+                            statusText.innerText = `訓練家: ${u.displayName}`;
+                            btn.innerText = "登出";
+                            btn.classList.add('logged-in');
+                            window.Cloud.load(); 
+                        } else {
+                            statusDot.classList.remove('online');
+                            statusText.innerText = "離線模式";
+                            btn.innerText = "登入雲端";
+                            btn.classList.remove('logged-in');
+                        }
+                    });
+
+                    window.toggleAuth = async () => {
+                        if (window.Cloud.user) {
+                            await signOut(window.Cloud.auth);
+                            location.reload();
+                        } else {
+                            try {
+                                await signInWithPopup(window.Cloud.auth, provider);
+                            } catch(e) {
+                                alert("登入失敗: " + e.message);
+                            }
+                        }
+                    };
+
+                } catch (e) {
+                    console.error("Cloud Init Error:", e);
+                    document.getElementById('cloudStatusText').innerText = "連線異常";
+                }
+            },
+
+            save: async (caughtArray) => {
+                if (!window.Cloud.db || !window.Cloud.user) return;
+                try {
+                    const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
+                    await setDoc(doc(window.Cloud.db, path, 'saveFile'), { 
+                        caughtList: caughtArray,
+                        lastUpdated: serverTimestamp() 
+                    });
+                } catch (e) {
+                    console.error("Save Failed:", e);
+                }
+            },
+
+            load: () => {
+                if (!window.Cloud.db || !window.Cloud.user) return;
+                const path = `artifacts/${window.Cloud.appId}/users/${window.Cloud.user.uid}/game_data`;
+                onSnapshot(doc(window.Cloud.db, path, 'saveFile'), (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if (data && data.caughtList) {
+                            window.caughtPokemon = new Set(data.caughtList);
+                            localStorage.setItem('poke_math_save_v2', JSON.stringify(data.caughtList));
+                            if (typeof window.renderPC === 'function') window.renderPC();
+                        }
+                    }
+                });
+            }
+        };
+        
+        window.Cloud.init();
+    </script>
+
+    <script>
+        // 音效系統
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let isMusicOn = false;
+        let nextNoteTime = 0;
+        let noteIndex = 0;
+        let bgmTimerID = null;
+
+        const Notes = {
+            'G2': 98.00, 'G#2': 103.83, 'A2': 110.00, 'A#2': 116.54, 'B2': 123.47,
+            'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
+            'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+            'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.25, 'F5': 698.46, 'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00,
+            'C6': 1046.50, 'G5': 783.99, 'F#5': 739.99, 'F5': 698.46, 'E5': 659.25, 'D#5': 622.25, 'D5': 587.33, 'C#5': 554.37
+        };
+
+        const SongData = {
+            tempo: 180, 
+            intro: [
+                {n: 'G5', d: 0.06}, {n: 'F#5', d: 0.06}, {n: 'F5', d: 0.06}, {n: 'E5', d: 0.06},
+                {n: 'D#5', d: 0.06}, {n: 'D5', d: 0.06}, {n: 'C#5', d: 0.06}, {n: 'C5', d: 0.06},
+                {n: 'B4', d: 0.06}, {n: 'A#4', d: 0.06}, {n: 'A4', d: 0.06}, {n: 'G#4', d: 0.06},
+                {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125},
+                {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125}, {n: 'G4', d: 0.125},
+            ],
+            loop: [
+                {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G3', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
+                {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G3', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
+                {n: 'C4', d: 0.125, type: 'sawtooth'}, {n: 'A#3', d: 0.125, type: 'sawtooth'}, {n: 'A3', d: 0.125, type: 'sawtooth'}, {n: 'G#3', d: 0.125, type: 'sawtooth'},
+                {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'}, {n: 'G2', d: 0.125, type: 'square'},
+                {n: 'C5', d: 0.125, type: 'sawtooth'}, {n: 'B4', d: 0.125, type: 'sawtooth'}, {n: 'A#4', d: 0.125, type: 'sawtooth'}, {n: 'A4', d: 0.125, type: 'sawtooth'},
+                {n: 'G#4', d: 0.125, type: 'sawtooth'}, {n: 'G4', d: 0.125, type: 'sawtooth'}, {n: 'F#4', d: 0.125, type: 'sawtooth'}, {n: 'F4', d: 0.125, type: 'sawtooth'},
+            ]
+        };
+
+        const RetroBGM = {
+            isPlaying: false,
+            currentSection: 'intro',
+            currentIndex: 0,
+            
+            play: () => {
+                if (RetroBGM.isPlaying) return;
+                RetroBGM.isPlaying = true;
+                RetroBGM.currentSection = 'intro';
+                RetroBGM.currentIndex = 0;
+                nextNoteTime = audioCtx.currentTime + 0.1;
+                RetroBGM.scheduler();
+            },
+
+            scheduler: () => {
+                if (!RetroBGM.isPlaying) return;
+                while (nextNoteTime < audioCtx.currentTime + 0.1) {
+                    RetroBGM.scheduleNote();
+                }
+                bgmTimerID = setTimeout(RetroBGM.scheduler, 25);
+            },
+
+            scheduleNote: () => {
+                const section = SongData[RetroBGM.currentSection];
+                const noteData = section[RetroBGM.currentIndex];
+                if (noteData) {
+                    const freq = Notes[noteData.n];
+                    const type = noteData.type || 'square';
+                    const volume = type === 'sawtooth' ? 0.05 : 0.08;
+                    playOscillator(freq, type, noteData.d, nextNoteTime, volume);
+                    const secondsPerBeat = 60.0 / SongData.tempo;
+                    nextNoteTime += noteData.d * secondsPerBeat * 4;
+                    RetroBGM.currentIndex++;
+                } else {
+                    if (RetroBGM.currentSection === 'intro') {
+                        RetroBGM.currentSection = 'loop';
+                        RetroBGM.currentIndex = 0;
+                    } else {
+                        RetroBGM.currentIndex = 0;
+                    }
+                }
+            },
+
+            stop: () => {
+                RetroBGM.isPlaying = false;
+                clearTimeout(bgmTimerID);
+            }
+        };
+
+        function playOscillator(freq, type, durationNote, time, vol) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(vol, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + (durationNote * 60/SongData.tempo * 4) * 0.8);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(time);
+            osc.stop(time + (durationNote * 60/SongData.tempo * 4));
+        }
+
+        const Sound = {
+            playTone: (freq, type, duration, time = 0, vol = 0.1) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + time);
+                gain.gain.setValueAtTime(0, audioCtx.currentTime + time);
+                gain.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + time + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + time + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + time);
+                osc.stop(audioCtx.currentTime + time + duration);
+            },
+            playCorrect: () => { Sound.playTone(600, 'sine', 0.1, 0); Sound.playTone(1200, 'sine', 0.2, 0.1); },
+            playWrong: () => { Sound.
